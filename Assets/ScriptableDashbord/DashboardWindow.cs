@@ -12,7 +12,6 @@ namespace NexEditor.ScriptableDashboard.Editor
         private Vector2 scroll;
         private ScriptableDashboard<DataType> dashboard;
 
-        [SerializeField]
         private List<float> columnWidths = new List<float>();
         private int resizingColumn = -1;
         private float dragStartX, dragStartWidth;
@@ -81,11 +80,12 @@ namespace NexEditor.ScriptableDashboard.Editor
             float x = headerRect.x;
             for (int i = 0; i < fieldNames.Count; i++)
             {
-                var rect = new Rect(x, headerRect.y, columnWidths[i], headerRect.height);
+                var rect = new Rect(x + 3.5f, headerRect.y, columnWidths[i], headerRect.height);
+                EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.3f));
                 GUI.Label(rect, fieldNames[i], EditorStyles.boldLabel);
 
                 // ドラッグハンドル
-                var handleRect = new Rect(rect.xMax - 2, rect.y, 8, rect.height);
+                var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
                 EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
                 int id = GUIUtility.GetControlID(FocusType.Passive);
                 if (Event.current.type == EventType.MouseUp && handleRect.Contains(Event.current.mousePosition))
@@ -108,7 +108,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                     Event.current.Use();
                 }
 
-                x += columnWidths[i] + 2.5f; // 2.5fはカラム間のスペース
+                x += columnWidths[i] + 3f; // 3fはカラム間のスペース
             }
             EditorGUILayout.EndHorizontal();
 
@@ -123,6 +123,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                 EditorGUI.DrawRect(adjusted, new Color(0.24f, 0.48f, 0.90f, 0.3f));
             }
 
+            // データ描画
             int index = 0;
             scroll = EditorGUILayout.BeginScrollView(scroll);
             foreach (var item in dashboard)
