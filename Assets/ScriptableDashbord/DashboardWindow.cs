@@ -12,6 +12,11 @@ namespace NexEditor.ScriptableDashboard.Editor
         private Vector2 scroll;
         private ScriptableDashboard<DataType> dashboard;
 
+        [SerializeField]
+        private List<float> columnWidths = new List<float>();
+        private int resizingColumn = -1;
+        private float dragStartX, dragStartWidth;
+
         public void Init(ScriptableDashboard<DataType> dashboard)
         {
             this.dashboard = dashboard;
@@ -45,46 +50,81 @@ namespace NexEditor.ScriptableDashboard.Editor
             EditorGUILayout.BeginVertical();
 
             if (dashboard == null) return;
+            if (dashboard.Count == 0) dashboard.Create();
 
-            if (dashboard.Count == 0)
-            {
-                dashboard.Create();
-            }
-
+            // カラム名・数取得
             var firstItem = new SerializedObject(dashboard[0]);
             var prop = firstItem.GetIterator();
+
+            // ヘッダー初期化
+            List<string> fieldNames = new List<string>();
             if (prop.NextVisible(true))
             {
-                EditorGUILayout.BeginHorizontal();
-                do
-                {
-                    EditorGUILayout.LabelField(prop.displayName, GUILayout.Width(150));
-                } while (prop.NextVisible(false));
-                EditorGUILayout.EndHorizontal();
+                do { fieldNames.Add(prop.displayName); } while (prop.NextVisible(false));
+            }
+            if (columnWidths.Count != fieldNames.Count)
+            {
+                columnWidths = new List<float>(new float[fieldNames.Count]);
+                for (int i = 0; i < columnWidths.Count; ++i) columnWidths[i] = 150;
             }
 
-            scroll = EditorGUILayout.BeginScrollView(scroll);
+            // ヘッダー描画
+            EditorGUILayout.BeginHorizontal();
+            var headerRect = GUILayoutUtility.GetRect(0, 10000, 18, 18, GUILayout.ExpandWidth(true));
+            float x = headerRect.x;
+            for (int i = 0; i < fieldNames.Count; i++)
+            {
+                var rect = new Rect(x, headerRect.y, columnWidths[i], headerRect.height);
+                GUI.Label(rect, fieldNames[i], EditorStyles.boldLabel);
 
+                // ドラッグハンドル
+                var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
+                EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
+                int id = GUIUtility.GetControlID(FocusType.Passive);
+                if (Event.current.type == EventType.MouseDown && handleRect.Contains(Event.current.mousePosition))
+                {
+                    resizingColumn = i;
+                    dragStartX = Event.current.mousePosition.x;
+                    dragStartWidth = columnWidths[i];
+                    Event.current.Use();
+                }
+                if (resizingColumn == i && Event.current.type == EventType.MouseDrag)
+                {
+                    float delta = Event.current.mousePosition.x - dragStartX;
+                    columnWidths[i] = Mathf.Max(40, dragStartWidth + delta);
+                    Event.current.Use();
+                    Repaint();
+                }
+                if (resizingColumn == i && Event.current.type == EventType.MouseUp)
+                {
+                    resizingColumn = -1;
+                    Event.current.Use();
+                }
+
+                x += columnWidths[i];
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // 以下、スクロール部
+            scroll = EditorGUILayout.BeginScrollView(scroll);
             foreach (var item in dashboard)
             {
                 var so = new SerializedObject(item);
-
                 var p = so.GetIterator();
                 so.Update();
                 if (p.NextVisible(true))
                 {
                     EditorGUILayout.BeginHorizontal();
+                    int idx = 0;
                     do
                     {
-                        DrawPropertyCell(p, GUILayout.Width(150));
+                        DrawPropertyCell(p, GUILayout.Width(columnWidths[idx++]));
                     } while (p.NextVisible(false));
                     EditorGUILayout.EndHorizontal();
                 }
                 so.ApplyModifiedProperties();
-
-                EditorGUILayout.Space(3); // 行間のスペース
+                EditorGUILayout.Space(3);
             }
-
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
