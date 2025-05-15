@@ -17,6 +17,8 @@ namespace NexEditor.ScriptableDashboard.Editor
         private int resizingColumn = -1;
         private float dragStartX, dragStartWidth;
 
+        private float temp; // デバッグ用。一時的な変数。
+
         public void Init(ScriptableDashboard<DataType> dashboard)
         {
             this.dashboard = dashboard;
@@ -42,8 +44,13 @@ namespace NexEditor.ScriptableDashboard.Editor
             if (GUILayout.Button("Delete")) { /* 削除処理 */ }
             if (GUILayout.Button("Sort")) { /* ソート処理 */ }
             if (GUILayout.Button("Filter")) { /* フィルター処理 */ }
+
+            temp = EditorGUILayout.Slider("Temp", temp, 0, 100);
+
             EditorGUILayout.EndVertical();
         }
+
+        Rect? selectedRect = null;
 
         void DrawGrid()
         {
@@ -78,10 +85,10 @@ namespace NexEditor.ScriptableDashboard.Editor
                 GUI.Label(rect, fieldNames[i], EditorStyles.boldLabel);
 
                 // ドラッグハンドル
-                var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
+                var handleRect = new Rect(rect.xMax - 2, rect.y, 8, rect.height);
                 EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
                 int id = GUIUtility.GetControlID(FocusType.Passive);
-                if (Event.current.type == EventType.MouseDown && handleRect.Contains(Event.current.mousePosition))
+                if (Event.current.type == EventType.MouseUp && handleRect.Contains(Event.current.mousePosition))
                 {
                     resizingColumn = i;
                     dragStartX = Event.current.mousePosition.x;
@@ -101,11 +108,22 @@ namespace NexEditor.ScriptableDashboard.Editor
                     Event.current.Use();
                 }
 
-                x += columnWidths[i];
+                x += columnWidths[i] + 2.5f; // 2.5fはカラム間のスペース
             }
             EditorGUILayout.EndHorizontal();
 
-            // 以下、スクロール部
+            // データ描画
+            if (selectedRect != null)
+            {
+                Rect adjusted = selectedRect.Value;
+                adjusted.x += 200 + 8;   // 左メニューの幅
+                adjusted.y += 18 - 3;    // ヘッダーの高さ
+                adjusted.y -= scroll.y; //スクロールのオフセット
+
+                EditorGUI.DrawRect(adjusted, new Color(0.24f, 0.48f, 0.90f, 0.3f));
+            }
+
+            int index = 0;
             scroll = EditorGUILayout.BeginScrollView(scroll);
             foreach (var item in dashboard)
             {
@@ -114,13 +132,22 @@ namespace NexEditor.ScriptableDashboard.Editor
                 so.Update();
                 if (p.NextVisible(true))
                 {
-                    EditorGUILayout.BeginHorizontal();
+                    var rowRect = EditorGUILayout.BeginHorizontal();
                     int idx = 0;
                     do
                     {
                         DrawPropertyCell(p, GUILayout.Width(columnWidths[idx++]));
                     } while (p.NextVisible(false));
                     EditorGUILayout.EndHorizontal();
+
+                    rowRect.height += 6;
+                    if (Event.current.type == EventType.MouseDown && rowRect.Contains(Event.current.mousePosition))
+                    {
+                        selectedIndex = index;
+                        selectedRect = rowRect;
+
+                        Repaint();
+                    }
                 }
                 so.ApplyModifiedProperties();
                 EditorGUILayout.Space(3);
