@@ -8,7 +8,8 @@ namespace NexEditor.ScriptableDashboard.Editor
 {
     public class DashboardWindow<DataType> : EditorWindow where DataType : ScriptableObject
     {
-        private int selectedIndex = -1;
+        private HashSet<int> selectedIndices = new HashSet<int>();
+        private int lastClickedIndex = -1; // Shift用の起点
         private Vector2 scroll;
         private ScriptableDashboard<DataType> dashboard;
 
@@ -17,6 +18,7 @@ namespace NexEditor.ScriptableDashboard.Editor
         private float dragStartX, dragStartWidth;
 
         private float temp; // デバッグ用。一時的な変数。
+        private Color color = Color.white; // デバッグ用。一時的な変数。
 
         public void Init(ScriptableDashboard<DataType> dashboard)
         {
@@ -27,9 +29,31 @@ namespace NexEditor.ScriptableDashboard.Editor
 
         private void OnGUI()
         {
+            // 編集するダッシュボードの設定
+            var prev = dashboard;
+            dashboard = (ScriptableDashboard<DataType>)EditorGUILayout.ObjectField("Dashboard", dashboard, typeof(ScriptableDashboard<DataType>), false);
+            if (dashboard != prev)
+            {
+                Init(dashboard);
+            }
+            if (dashboard == null) return;
+
             EditorGUILayout.BeginHorizontal();
 
             DrawLeftMenu();
+
+            bool ctrl = Event.current.control || Event.current.command;
+            bool shift = Event.current.shift;
+
+            if (Event.current.type == EventType.MouseDown && !ctrl && !shift)
+            {
+                // マウスが押されたときに、選択されている行をクリア
+                selectedIndices.Clear();
+                lastClickedIndex = -1;
+                Repaint();
+                Repaint();
+            }
+
             DrawGrid();
 
             EditorGUILayout.EndHorizontal();
@@ -38,18 +62,17 @@ namespace NexEditor.ScriptableDashboard.Editor
         void DrawLeftMenu()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(200));
-            if (GUILayout.Button("Add")) { dashboard.Create(); }
-            if (GUILayout.Button("Insert")) { /* インサート処理 */ }
-            if (GUILayout.Button("Delete")) { /* 削除処理 */ }
+            if (GUILayout.Button("Add")) { dashboard.Create(); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
+            if (GUILayout.Button("Insert")) { /*dashboard.CreateAndInsert(selectedIndex); selectedIndex = -1;*/ }
+            if (GUILayout.Button("Delete")) { dashboard.Delete(selectedIndices); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
             if (GUILayout.Button("Sort")) { /* ソート処理 */ }
             if (GUILayout.Button("Filter")) { /* フィルター処理 */ }
 
             temp = EditorGUILayout.Slider("Temp", temp, 0, 100);
+            color = EditorGUILayout.ColorField("Color", color);
 
             EditorGUILayout.EndVertical();
         }
-
-        Rect? selectedRect = null;
 
         void DrawGrid()
         {
@@ -113,17 +136,6 @@ namespace NexEditor.ScriptableDashboard.Editor
             EditorGUILayout.EndHorizontal();
 
             // データ描画
-            if (selectedRect != null)
-            {
-                Rect adjusted = selectedRect.Value;
-                adjusted.x += 200 + 8;   // 左メニューの幅
-                adjusted.y += 18 - 3;    // ヘッダーの高さ
-                adjusted.y -= scroll.y; //スクロールのオフセット
-
-                EditorGUI.DrawRect(adjusted, new Color(0.24f, 0.48f, 0.90f, 0.3f));
-            }
-
-            // データ描画
             int index = 0;
             scroll = EditorGUILayout.BeginScrollView(scroll);
             foreach (var item in dashboard)
@@ -133,7 +145,8 @@ namespace NexEditor.ScriptableDashboard.Editor
                 so.Update();
                 if (p.NextVisible(true))
                 {
-                    var rowRect = EditorGUILayout.BeginHorizontal();
+                    Rect rowRect = EditorGUILayout.BeginHorizontal();
+
                     int idx = 0;
                     do
                     {
@@ -141,17 +154,53 @@ namespace NexEditor.ScriptableDashboard.Editor
                     } while (p.NextVisible(false));
                     EditorGUILayout.EndHorizontal();
 
+                    // ハイライト用の矩形のサイズ調整
+                    rowRect.y -= 3;
                     rowRect.height += 6;
+                    rowRect.width += 8;
+                    rowRect.xMin -= 4;
+
+                    // 選択されている行をここでハイライト
+                    if (selectedIndices.Contains(index))
+                    {
+                        EditorGUI.DrawRect(rowRect, new Color(0.24f, 0.48f, 0.90f, 0.1f));
+                    }
+
+                    // 行のクリック処理
                     if (Event.current.type == EventType.MouseDown && rowRect.Contains(Event.current.mousePosition))
                     {
-                        selectedIndex = index;
-                        selectedRect = rowRect;
+                        bool ctrl = Event.current.control || Event.current.command;
+                        bool shift = Event.current.shift;
+
+                        if (shift && lastClickedIndex != -1)
+                        {
+                            // 範囲選択
+                            int min = Mathf.Min(lastClickedIndex, index);
+                            int max = Mathf.Max(lastClickedIndex, index);
+                            selectedIndices.Clear();
+                            for (int i = min; i <= max; i++) selectedIndices.Add(i);
+                        }
+                        else if (ctrl)
+                        {
+                            // トグル選択
+                            if (selectedIndices.Contains(index)) selectedIndices.Remove(index);
+                            else selectedIndices.Add(index);
+                            lastClickedIndex = index;
+                        }
+                        else
+                        {
+                            // 単一選択
+                            selectedIndices.Clear();
+                            selectedIndices.Add(index);
+                            lastClickedIndex = index;
+                        }
 
                         Repaint();
                     }
                 }
                 so.ApplyModifiedProperties();
                 EditorGUILayout.Space(3);
+                index++;
             }
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
