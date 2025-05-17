@@ -57,7 +57,9 @@ namespace NexEditor
 
         public T CreateAndInsert(int index)
         {
-            if (index < 0 || index > _collection.Count) return null;
+            if (index < 0) index = 0;
+            else if (index > _collection.Count) return Create();
+
             var instance = CreateInstance<T>();
 #if UNITY_EDITOR
             // Undoの開始（親アセットの変更）
@@ -76,6 +78,12 @@ namespace NexEditor
             AssetDatabase.Refresh();
 #endif
             return instance;
+        }
+
+        public void CreateAndInsert(SortedSet<int> indexes)
+        {
+            if (indexes == null || indexes.Count == 0) return;
+            foreach (var item in indexes.Reverse()) CreateAndInsert(item + 1);
         }
 
         public void Delete(T data)
@@ -118,7 +126,7 @@ namespace NexEditor
 #endif
         }
 
-        public void Delete(HashSet<int> indexes)
+        public void Delete(SortedSet<int> indexes)
         {
             if (indexes == null || indexes.Count == 0) return;
             HashSet<T> values = new HashSet<T>();

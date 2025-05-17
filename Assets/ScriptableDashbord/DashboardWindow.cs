@@ -8,7 +8,7 @@ namespace NexEditor.ScriptableDashboard.Editor
 {
     public class DashboardWindow<DataType> : EditorWindow where DataType : ScriptableObject
     {
-        private HashSet<int> selectedIndices = new HashSet<int>();
+        private SortedSet<int> selectedIndices = new SortedSet<int>();
         private int lastClickedIndex = -1; // Shift用の起点
         private Vector2 scroll;
         private ScriptableDashboard<DataType> dashboard;
@@ -51,7 +51,6 @@ namespace NexEditor.ScriptableDashboard.Editor
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 Repaint();
-                Repaint();
             }
 
             DrawGrid();
@@ -63,13 +62,17 @@ namespace NexEditor.ScriptableDashboard.Editor
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(200));
             if (GUILayout.Button("Add")) { dashboard.Create(); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
-            if (GUILayout.Button("Insert")) { /*dashboard.CreateAndInsert(selectedIndex); selectedIndex = -1;*/ }
+            if (GUILayout.Button("Insert")) { dashboard.CreateAndInsert(selectedIndices); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
             if (GUILayout.Button("Delete")) { dashboard.Delete(selectedIndices); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
             if (GUILayout.Button("Sort")) { /* ソート処理 */ }
             if (GUILayout.Button("Filter")) { /* フィルター処理 */ }
 
             temp = EditorGUILayout.Slider("Temp", temp, 0, 100);
             color = EditorGUILayout.ColorField("Color", color);
+            if (dashboard != null)
+            {
+                EditorGUILayout.LabelField($"Count: {dashboard.Count}");
+            }
 
             EditorGUILayout.EndVertical();
         }
@@ -84,6 +87,7 @@ namespace NexEditor.ScriptableDashboard.Editor
             // カラム名・数取得
             var firstItem = new SerializedObject(dashboard[0]);
             var prop = firstItem.GetIterator();
+            float leftSpace = 20;
 
             // ヘッダー初期化
             List<string> fieldNames = new List<string>();
@@ -99,6 +103,8 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             // ヘッダー描画
             EditorGUILayout.BeginHorizontal();
+            // 左側のスペースを確保
+            GUILayout.Space(leftSpace);
             var headerRect = GUILayoutUtility.GetRect(0, 10000, 18, 18, GUILayout.ExpandWidth(true));
             float x = headerRect.x;
             for (int i = 0; i < fieldNames.Count; i++)
@@ -138,6 +144,7 @@ namespace NexEditor.ScriptableDashboard.Editor
             // データ描画
             int index = 0;
             scroll = EditorGUILayout.BeginScrollView(scroll);
+            EditorGUILayout.Space(8);
             foreach (var item in dashboard)
             {
                 var so = new SerializedObject(item);
@@ -147,6 +154,8 @@ namespace NexEditor.ScriptableDashboard.Editor
                 {
                     Rect rowRect = EditorGUILayout.BeginHorizontal();
 
+                    // 左側のスペースを確保
+                    GUILayout.Space(leftSpace);
                     int idx = 0;
                     do
                     {
@@ -202,6 +211,8 @@ namespace NexEditor.ScriptableDashboard.Editor
                 EditorGUILayout.Space(3);
                 index++;
             }
+
+            EditorGUILayout.Space(8);
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
