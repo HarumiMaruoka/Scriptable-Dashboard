@@ -355,15 +355,25 @@ namespace NexEditor.ScriptableDashboard.Editor
             {
                 var type = typeof(DataType);
                 var field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
-
                 if (field == null) return 0;
 
                 var valueA = field.GetValue(a);
                 var valueB = field.GetValue(b);
 
-                int result = Comparer<object>.Default.Compare(valueA, valueB);
+                // nullチェックを行う
+                if (valueA == null && valueB == null) return 0;
+                if (valueA == null) return ascending ? -1 : 1;
+                if (valueB == null) return ascending ? 1 : -1;
 
-                return ascending ? result : -result;
+                // IComparableを実装している場合にキャストして比較
+                if (valueA is IComparable comparableA && valueB is IComparable comparableB)
+                {
+                    int result = comparableA.CompareTo(comparableB);
+                    return ascending ? result : -result;
+                }
+
+                // IComparable未実装ならデフォルトで0を返す（順序を変更しない）
+                return 0;
             });
 
             Repaint();
