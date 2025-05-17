@@ -165,12 +165,24 @@ namespace NexEditor
 #if UNITY_EDITOR
             Undo.RecordObject(this, "Move Dashboard Item");
 #endif
-
             var item = _collection[fromIndex];
             _collection.RemoveAt(fromIndex);
             if (toIndex > fromIndex) toIndex--;
             _collection.Insert(toIndex, item);
 
+#if UNITY_EDITOR
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+#endif
+        }
+
+        public void Sort(Comparison<T> comparison)
+        {
+#if UNITY_EDITOR
+            Undo.RecordObject(this, "Sort Dashboard");
+#endif
+            _collection.Sort(comparison);
 #if UNITY_EDITOR
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssets();

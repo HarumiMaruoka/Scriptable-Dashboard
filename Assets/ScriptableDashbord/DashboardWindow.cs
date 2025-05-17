@@ -20,6 +20,9 @@ namespace NexEditor.ScriptableDashboard.Editor
         private int dragSourceIndex = -1;
         private int dragTargetIndex = -1;
 
+        private int sortColumnIndex = -1; // -1は未選択
+        private bool isAscending = true;  // trueなら昇順、falseなら降順
+
         private float temp; // デバッグ用。一時的な変数。
         private Color color = Color.white; // デバッグ用。一時的な変数。
 
@@ -58,6 +61,7 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             DrawGrid();
 
+            // 要素の移動（ドラッグアンドドロップ）
             if (dragSourceIndex != -1)
             {
                 switch (Event.current.type)
@@ -124,14 +128,15 @@ namespace NexEditor.ScriptableDashboard.Editor
             float leftSpace = 20;
 
             // ヘッダー初期化
+            List<string> displayNames = new List<string>();
             List<string> fieldNames = new List<string>();
             if (prop.NextVisible(true))
             {
-                do { fieldNames.Add(prop.displayName); } while (prop.NextVisible(false));
+                do { displayNames.Add(prop.displayName); fieldNames.Add(prop.name); } while (prop.NextVisible(false));
             }
-            if (columnWidths.Count != fieldNames.Count)
+            if (columnWidths.Count != displayNames.Count)
             {
-                columnWidths = new List<float>(new float[fieldNames.Count]);
+                columnWidths = new List<float>(new float[displayNames.Count]);
                 for (int i = 0; i < columnWidths.Count; ++i) columnWidths[i] = 150;
             }
 
@@ -141,17 +146,32 @@ namespace NexEditor.ScriptableDashboard.Editor
             GUILayout.Space(leftSpace);
             var headerRect = GUILayoutUtility.GetRect(0, 10000, 18, 18, GUILayout.ExpandWidth(true));
             float x = headerRect.x;
-            for (int i = 0; i < fieldNames.Count; i++)
+            for (int i = 0; i < displayNames.Count; i++)
             {
                 var rect = new Rect(x + 3.5f, headerRect.y, columnWidths[i], headerRect.height);
                 EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.3f));
-                GUI.Label(rect, fieldNames[i], EditorStyles.boldLabel);
+
+                if (GUI.Button(rect, displayNames[i], EditorStyles.boldLabel))
+                {
+                    GUI.FocusControl(null);
+                    if (sortColumnIndex == i)
+                    {
+                        isAscending = !isAscending; // 同じ列なら順序反転
+                    }
+                    else
+                    {
+                        sortColumnIndex = i;
+                        isAscending = true; // 新しい列なら昇順から
+                    }
+
+                    SortDashboardByColumn(sortColumnIndex, isAscending, fieldNames[i]);
+                }
 
                 // ドラッグハンドル
                 var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
                 EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
                 int id = GUIUtility.GetControlID(FocusType.Passive);
-                if (Event.current.type == EventType.MouseUp && handleRect.Contains(Event.current.mousePosition))
+                if (Event.current.type == EventType.MouseDown && handleRect.Contains(Event.current.mousePosition))
                 {
                     resizingColumn = i;
                     dragStartX = Event.current.mousePosition.x;
@@ -311,13 +331,15 @@ namespace NexEditor.ScriptableDashboard.Editor
             if (index != dragSourceIndex && dragSourceIndex != -1 && rowRect.Contains(Event.current.mousePosition))
             {
                 float lineY = rowRect.y;
-                if (Event.current.mousePosition.y > rowRect.y + rowRect.height / 2)
+                if (Event.current.mousePosition.y > rowRect.y + rowRect.height / 2) // 下半分
                 {
+                    if (dragSourceIndex == index + 1) return;
                     dragTargetIndex = index + 1;
                     lineY += rowRect.height;
                 }
-                else
+                else // 上半分
                 {
+                    if (dragSourceIndex == index - 1) return;
                     dragTargetIndex = index;
                 }
 
@@ -326,5 +348,26 @@ namespace NexEditor.ScriptableDashboard.Editor
                 EditorGUI.DrawRect(lineRect, Color.yellow);
             }
         }
+
+        void SortDashboardByColumn(int columnIndex, bool ascending, string fieldName)
+        {
+            dashboard.Sort((a, b) =>
+            {
+                var type = typeof(DataType);
+                var field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+
+                if (field == null) return 0;
+
+                var valueA = field.GetValue(a);
+                var valueB = field.GetValue(b);
+
+                int result = Comparer<object>.Default.Compare(valueA, valueB);
+
+                return ascending ? result : -result;
+            });
+
+            Repaint();
+        }
+
     }
 }
