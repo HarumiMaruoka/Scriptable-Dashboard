@@ -156,5 +156,26 @@ namespace NexEditor
             AssetDatabase.Refresh();
 #endif
         }
+
+        public void Move(int fromIndex, int toIndex) // 要素を移動する
+        {
+            if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0 ||
+                fromIndex >= _collection.Count || toIndex >= _collection.Count) return;
+
+#if UNITY_EDITOR
+            Undo.RecordObject(this, "Move Dashboard Item");
+#endif
+
+            var item = _collection[fromIndex];
+            _collection.RemoveAt(fromIndex);
+            if (toIndex > fromIndex) toIndex--;
+            _collection.Insert(toIndex, item);
+
+#if UNITY_EDITOR
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+#endif
+        }
     }
 }

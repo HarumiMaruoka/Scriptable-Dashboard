@@ -17,6 +17,9 @@ namespace NexEditor.ScriptableDashboard.Editor
         private int resizingColumn = -1;
         private float dragStartX, dragStartWidth;
 
+        private int dragSourceIndex = -1;
+        private int dragTargetIndex = -1;
+
         private float temp; // デバッグ用。一時的な変数。
         private Color color = Color.white; // デバッグ用。一時的な変数。
 
@@ -55,6 +58,38 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             DrawGrid();
 
+            if (dragSourceIndex != -1)
+            {
+                switch (Event.current.type)
+                {
+                    case EventType.DragUpdated:
+                        DragAndDrop.visualMode = DragAndDropVisualMode.Move;
+                        Event.current.Use();
+                        break;
+
+                    case EventType.DragPerform:
+                    case EventType.MouseUp:
+                        if (dragTargetIndex != -1 && dragTargetIndex != dragSourceIndex)
+                        {
+                            // 移動処理
+                            dashboard.Move(dragSourceIndex, dragTargetIndex);
+                            selectedIndices.Add(dragTargetIndex);
+                            selectedIndices.Remove(dragSourceIndex);
+                        }
+                        dragSourceIndex = -1;
+                        dragTargetIndex = -1;
+                        DragAndDrop.AcceptDrag();
+                        Event.current.Use();
+                        break;
+
+                    case EventType.DragExited:
+                        dragSourceIndex = -1;
+                        dragTargetIndex = -1;
+                        Event.current.Use();
+                        break;
+                }
+            }
+
             EditorGUILayout.EndHorizontal();
         }
 
@@ -69,10 +104,9 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             temp = EditorGUILayout.Slider("Temp", temp, 0, 100);
             color = EditorGUILayout.ColorField("Color", color);
-            if (dashboard != null)
-            {
-                EditorGUILayout.LabelField($"Count: {dashboard.Count}");
-            }
+            if (dashboard != null) EditorGUILayout.LabelField($"Count: {dashboard.Count}");
+            var mousePos = Event.current.mousePosition;
+            EditorGUILayout.LabelField($"Mouse Position: {mousePos.x}, {mousePos.y}");
 
             EditorGUILayout.EndVertical();
         }
@@ -160,6 +194,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                     do
                     {
                         DrawPropertyCell(p, GUILayout.Width(columnWidths[idx++]));
+
                     } while (p.NextVisible(false));
                     EditorGUILayout.EndHorizontal();
 
@@ -174,6 +209,19 @@ namespace NexEditor.ScriptableDashboard.Editor
                     {
                         EditorGUI.DrawRect(rowRect, new Color(0.24f, 0.48f, 0.90f, 0.1f));
                     }
+
+                    // ドラッグ開始検知
+                    if (Event.current.type == EventType.MouseDrag && rowRect.Contains(Event.current.mousePosition))
+                    {
+                        dragSourceIndex = index;
+                        DragAndDrop.PrepareStartDrag();
+                        DragAndDrop.objectReferences = new UnityEngine.Object[0];
+                        DragAndDrop.StartDrag("DraggingRow");
+                        Event.current.Use();
+                    }
+
+                    // 挿入位置（黄色のライン）表示
+                    DrawInsertionLine(index, ref rowRect);
 
                     // 行のクリック処理
                     if (Event.current.type == EventType.MouseDown && rowRect.Contains(Event.current.mousePosition))
@@ -212,6 +260,15 @@ namespace NexEditor.ScriptableDashboard.Editor
                 index++;
             }
 
+            // リスト末尾の処理（最後尾への挿入）
+            Rect lastRowRect = GUILayoutUtility.GetLastRect();
+            if (dragSourceIndex != -1 && Event.current.mousePosition.y > lastRowRect.yMax)
+            {
+                dragTargetIndex = dashboard.Count;
+                Rect lineRect = new Rect(lastRowRect.x, lastRowRect.yMax + 1, lastRowRect.width, 4);
+                EditorGUI.DrawRect(lineRect, Color.yellow);
+            }
+
             EditorGUILayout.Space(8);
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
@@ -246,6 +303,27 @@ namespace NexEditor.ScriptableDashboard.Editor
             else
             {
                 EditorGUILayout.PropertyField(prop, GUIContent.none, options);
+            }
+        }
+
+        void DrawInsertionLine(int index, ref Rect rowRect)
+        {
+            if (index != dragSourceIndex && dragSourceIndex != -1 && rowRect.Contains(Event.current.mousePosition))
+            {
+                float lineY = rowRect.y;
+                if (Event.current.mousePosition.y > rowRect.y + rowRect.height / 2)
+                {
+                    dragTargetIndex = index + 1;
+                    lineY += rowRect.height;
+                }
+                else
+                {
+                    dragTargetIndex = index;
+                }
+
+                // 黄色ライン描画
+                Rect lineRect = new Rect(rowRect.x, lineY - 2, rowRect.width, 2);
+                EditorGUI.DrawRect(lineRect, Color.yellow);
             }
         }
     }
