@@ -133,7 +133,8 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             List<string> displayNames = new List<string>();
             List<string> fieldNames = new List<string>();
-            if (prop.NextVisible(true))
+            prop.NextVisible(true); // 最初のプロパティに移動
+            if (prop.NextVisible(false))
             {
                 do
                 {
@@ -159,7 +160,7 @@ namespace NexEditor.ScriptableDashboard.Editor
             EditorGUILayout.LabelField("Search", GUILayout.Width(46));
             int prevMask = fieldMask;
             string prevFilter = filterString;
-            int newMask = EditorGUILayout.MaskField(fieldMask, fieldNames.ToArray(), GUILayout.Width(150));
+            int newMask = EditorGUILayout.MaskField(fieldMask, displayNames.ToArray(), GUILayout.Width(150));
             filterString = EditorGUILayout.TextField(filterString);
             if (newMask != fieldMask)
             {
@@ -262,7 +263,8 @@ namespace NexEditor.ScriptableDashboard.Editor
                 var so = new SerializedObject(item);
                 var p = so.GetIterator();
                 so.Update();
-                if (p.NextVisible(true))
+                p.NextVisible(true); // 最初のプロパティに移動
+                if (p.NextVisible(false))
                 {
                     Rect rowRect = EditorGUILayout.BeginHorizontal();
 
