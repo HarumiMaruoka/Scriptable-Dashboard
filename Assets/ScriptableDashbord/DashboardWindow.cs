@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -16,6 +17,8 @@ namespace NexEditor.ScriptableDashboard.Editor
         private List<float> columnWidths = new List<float>();
         private int resizingColumn = -1;
         private float dragStartX, dragStartWidth;
+        private FieldInfo[] fieldInfos;
+        private Dictionary<string, FieldInfo> fieldNameToInfo = new Dictionary<string, FieldInfo>();
 
         private int dragSourceIndex = -1;
         private int dragTargetIndex = -1;
@@ -100,10 +103,9 @@ namespace NexEditor.ScriptableDashboard.Editor
         void DrawLeftMenu()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(200));
-            if (GUILayout.Button("Add")) { dashboard.Create(); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
+            if (GUILayout.Button("Create")) { dashboard.Create(); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
             if (GUILayout.Button("Insert")) { dashboard.CreateAndInsert(selectedIndices); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
             if (GUILayout.Button("Delete")) { dashboard.Delete(selectedIndices); selectedIndices.Clear(); lastClickedIndex = -1; GUI.FocusControl(null); }
-            if (GUILayout.Button("Sort")) { /* ソート処理 */ }
             if (GUILayout.Button("Filter")) { /* フィルター処理 */ }
 
             temp = EditorGUILayout.Slider("Temp", temp, 0, 100);
@@ -115,10 +117,12 @@ namespace NexEditor.ScriptableDashboard.Editor
             EditorGUILayout.EndVertical();
         }
 
+        private string filterString = "";
+        private int fieldMask = -1; // 全選択状態（デフォルト）
+        private IEnumerable<DataType> filteredItems;
+
         void DrawGrid()
         {
-            EditorGUILayout.BeginVertical();
-
             if (dashboard == null) return;
             if (dashboard.Count == 0) dashboard.Create();
 
@@ -127,13 +131,66 @@ namespace NexEditor.ScriptableDashboard.Editor
             var prop = firstItem.GetIterator();
             float leftSpace = 20;
 
-            // ヘッダー初期化
             List<string> displayNames = new List<string>();
             List<string> fieldNames = new List<string>();
             if (prop.NextVisible(true))
             {
-                do { displayNames.Add(prop.displayName); fieldNames.Add(prop.name); } while (prop.NextVisible(false));
+                do
+                {
+                    displayNames.Add(prop.displayName);
+                    fieldNames.Add(prop.name);
+                } while (prop.NextVisible(false));
             }
+            if (fieldInfos == null || fieldInfos.Length != displayNames.Count)
+            {
+                var type = typeof(DataType);
+                fieldInfos = type.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+
+                foreach (var f in fieldInfos)
+                {
+                    fieldNameToInfo[f.Name] = f;
+                }
+            }
+
+            EditorGUILayout.BeginVertical();
+
+            // フィルター
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Search", GUILayout.Width(46));
+            int prevMask = fieldMask;
+            string prevFilter = filterString;
+            int newMask = EditorGUILayout.MaskField(fieldMask, fieldNames.ToArray(), GUILayout.Width(150));
+            filterString = EditorGUILayout.TextField(filterString);
+            if (newMask != fieldMask)
+            {
+                // 「なし」チェック
+                if (newMask == 0)
+                {
+                    fieldMask = 0;
+                }
+                // 「すべて」チェック（全ビットON）
+                else if (newMask == (1 << fieldNames.Count) - 1)
+                {
+                    fieldMask = newMask;
+                }
+                else
+                {
+                    fieldMask = newMask;
+                }
+            }
+
+            if (prevMask != fieldMask || prevFilter != filterString) // フィルターの変更があった場合 
+            {
+                filteredItems = dashboard.Collection.Where(item => MatchesFilter(item));
+            }
+            else if (string.IsNullOrEmpty(filterString)) // フィルターが空の場合
+            {
+                filteredItems = dashboard.Collection;
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            // ヘッダー初期化
             if (columnWidths.Count != displayNames.Count)
             {
                 columnWidths = new List<float>(new float[displayNames.Count]);
@@ -199,7 +256,8 @@ namespace NexEditor.ScriptableDashboard.Editor
             int index = 0;
             scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUILayout.Space(8);
-            foreach (var item in dashboard)
+            if (filteredItems == null) filteredItems = dashboard.Collection;
+            foreach (var item in filteredItems)
             {
                 var so = new SerializedObject(item);
                 var p = so.GetIterator();
@@ -379,5 +437,20 @@ namespace NexEditor.ScriptableDashboard.Editor
             Repaint();
         }
 
+        bool MatchesFilter(DataType item)
+        {
+            if (string.IsNullOrEmpty(filterString)) return true;
+
+            for (int i = 0; i < fieldInfos.Length; i++)
+            {
+                if ((fieldMask & (1 << i)) == 0) continue;
+
+                var value = fieldInfos[i].GetValue(item);
+                if (value != null && value.ToString().IndexOf(filterString, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
     }
 }
