@@ -13,7 +13,7 @@ namespace NexEditor
     {
         [SerializeField]
         private List<T> _collection;
-        public IReadOnlyList<T> Collection => _collection ??= new List<T>();
+        public List<T> Collection => _collection ??= new List<T>();
 
         IEnumerator IEnumerable.GetEnumerator()
         {

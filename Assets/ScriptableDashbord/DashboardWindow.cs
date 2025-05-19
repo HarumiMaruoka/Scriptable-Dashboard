@@ -119,7 +119,7 @@ namespace NexEditor.ScriptableDashboard.Editor
 
         private string filterString = "";
         private int fieldMask = -1; // 全選択状態（デフォルト）
-        private IEnumerable<DataType> filteredItems;
+        private List<DataType> filteredItems;
 
         void DrawGrid()
         {
@@ -182,7 +182,7 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             if (prevMask != fieldMask || prevFilter != filterString) // フィルターの変更があった場合 
             {
-                filteredItems = dashboard.Collection.Where(item => MatchesFilter(item));
+                filteredItems = dashboard.Collection.Where(item => MatchesFilter(item)).ToList();
             }
             else if (string.IsNullOrEmpty(filterString)) // フィルターが空の場合
             {
@@ -225,7 +225,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                     SortDashboardByColumn(sortColumnIndex, isAscending, fieldNames[i]);
                 }
 
-                // ドラッグハンドル
+                // 列リサイズ（ドラッグハンドル）
                 var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
                 EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
                 int id = GUIUtility.GetControlID(FocusType.Passive);
@@ -291,13 +291,16 @@ namespace NexEditor.ScriptableDashboard.Editor
                     }
 
                     // ドラッグ開始検知
-                    if (Event.current.type == EventType.MouseDrag && rowRect.Contains(Event.current.mousePosition))
+                    if (filteredItems.Count == dashboard.Count)
                     {
-                        dragSourceIndex = index;
-                        DragAndDrop.PrepareStartDrag();
-                        DragAndDrop.objectReferences = new UnityEngine.Object[0];
-                        DragAndDrop.StartDrag("DraggingRow");
-                        Event.current.Use();
+                        if (Event.current.type == EventType.MouseDrag && rowRect.Contains(Event.current.mousePosition))
+                        {
+                            dragSourceIndex = index;
+                            DragAndDrop.PrepareStartDrag();
+                            DragAndDrop.objectReferences = new UnityEngine.Object[0];
+                            DragAndDrop.StartDrag("DraggingRow");
+                            Event.current.Use();
+                        }
                     }
 
                     // 挿入位置（黄色のライン）表示
