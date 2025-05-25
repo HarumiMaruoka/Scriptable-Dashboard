@@ -7,42 +7,70 @@ using UnityEngine;
 
 namespace NexEditor.ScriptableDashboard.Editor
 {
-    public class DashboardWindow<DataType> : EditorWindow where DataType : ScriptableObject
+    public class DashboardWindow2<DataType> : EditorWindow where DataType : ScriptableObject
     {
-        private List<SerializedObject> serializeds;
-
-        private SortedSet<int> selectedIndices = new SortedSet<int>();
-        private int lastClickedIndex = -1; // Shift用の起点
-        private Vector2 scroll;
+        // ダッシュボードのインスタンス
         private ScriptableDashboard<DataType> dashboard;
+        private List<SerializedObject> serializedItems;
+        private bool isDirty = false; // ダッシュボードが変更されたかどうかのフラグ
 
-        private List<float> columnWidths = new List<float>();
-        private int resizingColumn = -1;
-        private float dragStartX, dragStartWidth;
+        // フィールド情報
         private FieldInfo[] fieldInfos;
         private Dictionary<string, FieldInfo> fieldNameToInfo = new Dictionary<string, FieldInfo>();
 
+        // フィールド名
+        private List<string> displayNames = new List<string>();
+        private List<string> fieldNames = new List<string>();
+
+        // 範囲選択
+        private SortedSet<int> selectedIndices = new SortedSet<int>();
+        private int lastClickedIndex = -1; // Shift用の起点
+        private Vector2 scroll;
+
+        // 列幅
+        private List<float> columnWidths = new List<float>();
+        private int resizingColumn = -1;
+        private float dragStartX, dragStartWidth;
+
+        // 行移動
         private int dragSourceIndex = -1;
         private int dragTargetIndex = -1;
 
+        // ソート
         private int sortColumnIndex = -1; // -1は未選択
         private bool isAscending = true;  // trueなら昇順、falseなら降順
 
+        // フィルタ
         private string filterString = "";
         private int fieldMask = -1; // 全選択状態（デフォルト）
         private List<DataType> filteredItems;
 
-        private float temp; // デバッグ用。一時的な変数。
-        private Color color = Color.white; // デバッグ用。一時的な変数。
+        // デバッグ用
+        private float temp;
+        private Color color = Color.white;
 
         private void OnGUI()
         {
-            // 最上部：編集するダッシュボードの設定
-            DrawDashboardSettings();
+            // 最上部：編集するダッシュボードの設定。ダッシュボードが未設定の場合は、何も表示しない。
+            bool isDashboardConfigured = DrawDashboardSettings();
+            if (!isDashboardConfigured) return;
+            ClearSelection();
 
             EditorGUILayout.BeginHorizontal();
 
+            // 中央左側： 追加、削除ボタンなどを含む、左側のメニュー。
+            DrawLeftMenu();
+
+            // 中央右側：グリッドの描画。
+            DrawRightGrid();
+
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void ClearSelection()
+        {
             // マウスが押されたときに、選択されている行をクリア
+            EventType eventType = Event.current.type;
             bool ctrl = Event.current.control || Event.current.command;
             bool shift = Event.current.shift;
             if (Event.current.type == EventType.MouseDown && !ctrl && !shift)
@@ -51,47 +79,29 @@ namespace NexEditor.ScriptableDashboard.Editor
                 lastClickedIndex = -1;
                 Repaint();
             }
-
-            // 中央左側： 追加、削除ボタンなどを含む、左側のメニュー。
-            DrawLeftMenu();
-
-            // 中央右側：グリッドの描画
-            DrawGrid();
-
-            EditorGUILayout.EndHorizontal();
         }
 
-        public void Init(ScriptableDashboard<DataType> dashboard)
+        private bool DrawDashboardSettings()
         {
-            this.dashboard = dashboard;
-            titleContent = new GUIContent(dashboard.name);
-            minSize = new Vector2(400, 300);
-        }
-
-        private void DrawDashboardSettings()
-        {
+            // ダッシュボードに変更があった場合、ダッシュボードを再初期化。
             var prev = dashboard;
             dashboard = (ScriptableDashboard<DataType>)EditorGUILayout.ObjectField("Dashboard", dashboard, typeof(ScriptableDashboard<DataType>), false);
-            if (dashboard != prev)
-            {
-                Init(dashboard);
-            }
-            if (dashboard == null) return;
+            if (dashboard != prev) DashboardChanged(dashboard);
+            if (fieldInfos == null || fieldInfos.Length != displayNames.Count) InitializeFieldInfo();
+            if (dashboard == null) return false;
+            return true;
         }
 
         void DrawLeftMenu()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(200));
 
+            // メインメニュー：フィルタリング中は無効。
             bool isFiltering = !string.IsNullOrEmpty(filterString);
-
             GUI.enabled = !isFiltering;
             if (GUILayout.Button(new GUIContent("Add", isFiltering ? "検索中は使用できません" : "")))
             {
-                for (int i = 0; i < 300; i++) // 動作確認用
-                {
-                    dashboard.Create();
-                }
+                //dashboard.Create();
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 GUI.FocusControl(null);
@@ -99,7 +109,7 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             if (GUILayout.Button(new GUIContent("Insert", isFiltering ? "検索中は使用できません" : "")))
             {
-                dashboard.CreateAndInsert(selectedIndices);
+                //dashboard.CreateAndInsert(selectedIndices);
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 GUI.FocusControl(null);
@@ -107,155 +117,35 @@ namespace NexEditor.ScriptableDashboard.Editor
 
             if (GUILayout.Button(new GUIContent("Delete", isFiltering ? "検索中は使用できません" : "")))
             {
-                dashboard.Delete(selectedIndices);
+                //dashboard.Delete(selectedIndices);
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 GUI.FocusControl(null);
             }
             GUI.enabled = true;
 
+            // デバッグ用パラメータの表示
             temp = EditorGUILayout.Slider("Temp", temp, 0, 100);
             color = EditorGUILayout.ColorField("Color", color);
-            if (dashboard != null) EditorGUILayout.LabelField($"Count: {dashboard.Count}");
-            var mousePos = Event.current.mousePosition;
-            EditorGUILayout.LabelField($"Mouse Position: {mousePos.x}, {mousePos.y}");
+
+            EditorGUILayout.LabelField($"Dashboard Count: {dashboard?.Count}");
+            EditorGUILayout.LabelField($"Serialized Item Count: {serializedItems?.Count}");
+            EditorGUILayout.LabelField($"Mouse Position: {Event.current.mousePosition.x}, {Event.current.mousePosition.y}");
 
             EditorGUILayout.EndVertical();
         }
 
-        void DrawGrid()
+        void DrawRightGrid()
         {
-            if (dashboard == null) return;
-            if (dashboard.Count == 0) dashboard.Create();
-
-            // カラム名・数取得
-            var firstItem = new SerializedObject(dashboard[0]);
-            var prop = firstItem.GetIterator();
-            float leftSpace = 20;
-
-            List<string> displayNames = new List<string>();
-            List<string> fieldNames = new List<string>();
-            prop.NextVisible(true); // 最初のプロパティに移動
-            if (prop.NextVisible(false))
-            {
-                do
-                {
-                    displayNames.Add(prop.displayName);
-                    fieldNames.Add(prop.name);
-                } while (prop.NextVisible(false));
-            }
-            if (fieldInfos == null || fieldInfos.Length != displayNames.Count)
-            {
-                var type = typeof(DataType);
-                fieldInfos = type.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
-
-                foreach (var f in fieldInfos)
-                {
-                    fieldNameToInfo[f.Name] = f;
-                }
-            }
+            if (dashboard.Count == 0) { /* dashboard.Create(); */ }
 
             EditorGUILayout.BeginVertical();
 
-            // フィルター
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Search", GUILayout.Width(46));
-            int prevMask = fieldMask;
-            string prevFilter = filterString;
-            int newMask = EditorGUILayout.MaskField(fieldMask, displayNames.ToArray(), GUILayout.Width(150));
-            filterString = EditorGUILayout.TextField(filterString);
-            if (newMask != fieldMask)
-            {
-                // 「なし」チェック
-                if (newMask == 0)
-                {
-                    fieldMask = 0;
-                }
-                // 「すべて」チェック（全ビットON）
-                else if (newMask == (1 << fieldNames.Count) - 1)
-                {
-                    fieldMask = newMask;
-                }
-                else
-                {
-                    fieldMask = newMask;
-                }
-            }
-
-            if (prevMask != fieldMask || prevFilter != filterString) // フィルターの変更があった場合 
-            {
-                selectedIndices.Clear();
-                lastClickedIndex = -1;
-                filteredItems = dashboard.Collection.Where(item => MatchesFilter(item)).ToList();
-            }
-            else if (string.IsNullOrEmpty(filterString)) // フィルターが空の場合
-            {
-                filteredItems = dashboard.Collection;
-            }
-
-            EditorGUILayout.EndHorizontal();
-
-            // ヘッダー初期化
-            if (columnWidths.Count != displayNames.Count)
-            {
-                columnWidths = new List<float>(new float[displayNames.Count]);
-                for (int i = 0; i < columnWidths.Count; ++i) columnWidths[i] = 150;
-            }
+            // フィルター部の描画
+            DrawFilterControls();
 
             // ヘッダー描画
-            EditorGUILayout.BeginHorizontal();
-            // 左側のスペースを確保
-            GUILayout.Space(leftSpace);
-            var headerRect = GUILayoutUtility.GetRect(0, 10000, 18, 18, GUILayout.ExpandWidth(true));
-            float x = headerRect.x;
-            for (int i = 0; i < displayNames.Count; i++)
-            {
-                var rect = new Rect(x + 3.5f, headerRect.y, columnWidths[i], headerRect.height);
-                EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.3f));
-
-                if (GUI.Button(rect, displayNames[i], EditorStyles.boldLabel))
-                {
-                    GUI.FocusControl(null);
-                    if (sortColumnIndex == i)
-                    {
-                        isAscending = !isAscending; // 同じ列なら順序反転
-                    }
-                    else
-                    {
-                        sortColumnIndex = i;
-                        isAscending = true; // 新しい列なら昇順から
-                    }
-
-                    SortDashboardByColumn(sortColumnIndex, isAscending, fieldNames[i]);
-                }
-
-                // 列リサイズ（ドラッグハンドル）
-                var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
-                EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
-                int id = GUIUtility.GetControlID(FocusType.Passive);
-                if (Event.current.type == EventType.MouseDown && handleRect.Contains(Event.current.mousePosition))
-                {
-                    resizingColumn = i;
-                    dragStartX = Event.current.mousePosition.x;
-                    dragStartWidth = columnWidths[i];
-                    Event.current.Use();
-                }
-                if (resizingColumn == i && Event.current.type == EventType.MouseDrag)
-                {
-                    float delta = Event.current.mousePosition.x - dragStartX;
-                    columnWidths[i] = Mathf.Max(40, dragStartWidth + delta);
-                    Event.current.Use();
-                    Repaint();
-                }
-                if (resizingColumn == i && Event.current.type == EventType.MouseUp)
-                {
-                    resizingColumn = -1;
-                    Event.current.Use();
-                }
-
-                x += columnWidths[i] + 3f; // 3fはカラム間のスペース
-            }
-            EditorGUILayout.EndHorizontal();
+            DrawHeaderRow();
 
             // データ描画
             int index = 0;
@@ -273,7 +163,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                     Rect rowRect = EditorGUILayout.BeginHorizontal();
 
                     // 左側のスペースを確保
-                    GUILayout.Space(leftSpace);
+                    GUILayout.Space(20);
                     int idx = 0;
                     do
                     {
@@ -310,12 +200,11 @@ namespace NexEditor.ScriptableDashboard.Editor
                     // 挿入位置（黄色のライン）表示
                     DrawInsertionLine(index, ref rowRect);
 
+                    bool ctrl = Event.current.control || Event.current.command;
+                    bool shift = Event.current.shift;
                     // 行のクリック処理
                     if (Event.current.type == EventType.MouseDown && rowRect.Contains(Event.current.mousePosition))
                     {
-                        bool ctrl = Event.current.control || Event.current.command;
-                        bool shift = Event.current.shift;
-
                         if (shift && lastClickedIndex != -1)
                         {
                             // 範囲選択
@@ -347,7 +236,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                 index++;
             }
 
-            // リスト末尾の処理（最後尾への挿入）
+            // ドラッグ中：最後尾への移動する場合のライン表示
             Rect lastRowRect = GUILayoutUtility.GetLastRect();
             if (dragSourceIndex != -1 && Event.current.mousePosition.y > lastRowRect.yMax)
             {
@@ -360,6 +249,11 @@ namespace NexEditor.ScriptableDashboard.Editor
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
 
+            HandleRowDragAndDrop();
+        }
+
+        private void HandleRowDragAndDrop()
+        {
             // 要素の移動（ドラッグアンドドロップ）
             if (dragSourceIndex != -1)
             {
@@ -449,6 +343,69 @@ namespace NexEditor.ScriptableDashboard.Editor
             }
         }
 
+        private void DrawHeaderRow()
+        {
+            if (columnWidths.Count != displayNames.Count)
+            {
+                columnWidths = new List<float>(new float[displayNames.Count]);
+                for (int i = 0; i < columnWidths.Count; ++i) columnWidths[i] = 150;
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            // 左側のスペースを確保
+            GUILayout.Space(20);
+            var headerRect = GUILayoutUtility.GetRect(0, 10000, 18, 18, GUILayout.ExpandWidth(true));
+            float x = headerRect.x;
+            for (int i = 0; i < displayNames.Count; i++)
+            {
+                var rect = new Rect(x + 3.5f, headerRect.y, columnWidths[i], headerRect.height);
+                EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.3f));
+
+                if (GUI.Button(rect, displayNames[i], EditorStyles.boldLabel))
+                {
+                    GUI.FocusControl(null);
+                    if (sortColumnIndex == i)
+                    {
+                        isAscending = !isAscending; // 同じ列なら順序反転
+                    }
+                    else
+                    {
+                        sortColumnIndex = i;
+                        isAscending = true; // 新しい列なら昇順から
+                    }
+
+                    SortDashboardByColumn(sortColumnIndex, isAscending, fieldNames[i]);
+                }
+
+                // 列リサイズ（ドラッグハンドル）
+                var handleRect = new Rect(rect.xMax - 4, rect.y, 8, rect.height);
+                EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
+                int id = GUIUtility.GetControlID(FocusType.Passive);
+                if (Event.current.type == EventType.MouseDown && handleRect.Contains(Event.current.mousePosition))
+                {
+                    resizingColumn = i;
+                    dragStartX = Event.current.mousePosition.x;
+                    dragStartWidth = columnWidths[i];
+                    Event.current.Use();
+                }
+                if (resizingColumn == i && Event.current.type == EventType.MouseDrag)
+                {
+                    float delta = Event.current.mousePosition.x - dragStartX;
+                    columnWidths[i] = Mathf.Max(40, dragStartWidth + delta);
+                    Event.current.Use();
+                    Repaint();
+                }
+                if (resizingColumn == i && Event.current.type == EventType.MouseUp)
+                {
+                    resizingColumn = -1;
+                    Event.current.Use();
+                }
+
+                x += columnWidths[i] + 3f; // 3fはカラム間のスペース
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
         void SortDashboardByColumn(int columnIndex, bool ascending, string fieldName)
         {
             dashboard.Sort((a, b) =>
@@ -505,6 +462,47 @@ namespace NexEditor.ScriptableDashboard.Editor
             Repaint();
         }
 
+        private void DrawFilterControls()
+        {
+            // フィルター
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Search", GUILayout.Width(46));
+            int prevMask = fieldMask;
+            string prevFilter = filterString;
+            int newMask = EditorGUILayout.MaskField(fieldMask, displayNames.ToArray(), GUILayout.Width(150));
+            filterString = EditorGUILayout.TextField(filterString);
+            if (newMask != fieldMask)
+            {
+                // 「なし」チェック
+                if (newMask == 0)
+                {
+                    fieldMask = 0;
+                }
+                // 「すべて」チェック（全ビットON）
+                else if (newMask == (1 << fieldNames.Count) - 1)
+                {
+                    fieldMask = newMask;
+                }
+                else
+                {
+                    fieldMask = newMask;
+                }
+            }
+
+            if (prevMask != fieldMask || prevFilter != filterString) // フィルターの変更があった場合 
+            {
+                selectedIndices.Clear();
+                lastClickedIndex = -1;
+                filteredItems = dashboard.Collection.Where(item => MatchesFilter(item)).ToList();
+            }
+            else if (string.IsNullOrEmpty(filterString)) // フィルターが空の場合
+            {
+                filteredItems = dashboard.Collection;
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
+
         // 指定されたアイテムがフィルターに一致するかどうかを判定
         bool MatchesFilter(DataType item)
         {
@@ -520,6 +518,47 @@ namespace NexEditor.ScriptableDashboard.Editor
             }
 
             return false;
+        }
+
+        // ダッシュボードの初期化
+        public void DashboardChanged(ScriptableDashboard<DataType> dashboard)
+        {
+            this.dashboard = dashboard;
+            serializedItems = new List<SerializedObject>(dashboard.Count);
+
+            foreach (var item in this.dashboard)
+            {
+                var serializedObject = new SerializedObject(item);
+                serializedItems.Add(serializedObject);
+            }
+
+            // ウィンドウの設定。（タイトル、最小サイズ）
+            titleContent = new GUIContent(dashboard.name);
+            minSize = new Vector2(400, 300);
+        }
+
+        // カラム名、フィールド情報の取得。
+        private void InitializeFieldInfo()
+        {
+            var firstItem = new SerializedObject(dashboard[0]);
+            var prop = firstItem.GetIterator();
+
+            prop.NextVisible(true); // 最初のプロパティに移動
+            if (prop.NextVisible(false))
+            {
+                do
+                {
+                    displayNames.Add(prop.displayName);
+                    fieldNames.Add(prop.name);
+                } while (prop.NextVisible(false));
+            }
+
+            fieldInfos = typeof(DataType).GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (var f in fieldInfos)
+            {
+                fieldNameToInfo[f.Name] = f;
+            }
         }
     }
 }

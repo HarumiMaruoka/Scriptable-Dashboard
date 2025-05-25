@@ -160,7 +160,7 @@ namespace NexEditor
         public void Move(int fromIndex, int toIndex) // 要素を移動する
         {
             if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0 ||
-                fromIndex >= _collection.Count || toIndex >= _collection.Count) return;
+                fromIndex >= _collection.Count || toIndex > _collection.Count) return;
 
 #if UNITY_EDITOR
             Undo.RecordObject(this, "Move Dashboard Item");
