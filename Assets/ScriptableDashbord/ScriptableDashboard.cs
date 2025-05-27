@@ -55,6 +55,36 @@ namespace NexEditor
             return instance;
         }
 
+        public T[] Create(int count)
+        {
+            if (count <= 0) return Array.Empty<T>();
+            var instances = new T[count];
+
+#if UNITY_EDITOR
+            // Undoの開始（親アセットの変更）
+            Undo.RecordObject(this, "Update Dashboard");
+#endif
+            for (int i = 0; i < count; i++)
+            {
+                var instance = CreateInstance<T>();
+                _collection.Add(instance);
+                instances[i] = instance;
+#if UNITY_EDITOR
+                // サブアセットとして登録
+                AssetDatabase.AddObjectToAsset(instance, this);
+                // サブアセット追加をUndoに登録
+                Undo.RegisterCreatedObjectUndo(instance, "Create Asset");
+            }
+
+            // 保存
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+#endif
+
+            return instances;
+        }
+
         public T CreateAndInsert(int index)
         {
             if (index < 0) index = 0;
