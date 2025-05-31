@@ -91,7 +91,8 @@ namespace NexEditor.ScriptableDashboard.Editor
             GUI.enabled = !isFiltering;
             if (GUILayout.Button(new GUIContent("Add", isFiltering ? "検索中は使用できません" : "")))
             {
-                dashboard.Create((int)temp);
+                dashboard.Create();
+                RefreshSerializedObjects();
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 GUI.FocusControl(null);
@@ -100,6 +101,7 @@ namespace NexEditor.ScriptableDashboard.Editor
             if (GUILayout.Button(new GUIContent("Insert", isFiltering ? "検索中は使用できません" : "")))
             {
                 dashboard.CreateAndInsert(selectedIndices);
+                RefreshSerializedObjects();
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 GUI.FocusControl(null);
@@ -108,6 +110,7 @@ namespace NexEditor.ScriptableDashboard.Editor
             if (GUILayout.Button(new GUIContent("Delete", isFiltering ? "検索中は使用できません" : "")))
             {
                 dashboard.Delete(selectedIndices);
+                RefreshSerializedObjects();
                 selectedIndices.Clear();
                 lastClickedIndex = -1;
                 GUI.FocusControl(null);
@@ -146,7 +149,6 @@ namespace NexEditor.ScriptableDashboard.Editor
             if (filteredItems == null) filteredItems = dashboard.Collection;
             foreach (var item in filteredItems)
             {
-                //var so = new SerializedObject(item);
                 SerializedObject so;
                 if (!serializedObjects.TryGetValue(item, out so))
                 {
@@ -166,7 +168,7 @@ namespace NexEditor.ScriptableDashboard.Editor
                     int idx = 0;
                     do
                     {
-                        DrawPropertyCell(p, GUILayout.Width(columnWidths[idx++]));
+                        DrawPropertyCell(index, p, GUILayout.Width(columnWidths[idx++]));
 
                     } while (p.NextVisible(false));
                     EditorGUILayout.EndHorizontal();
@@ -345,7 +347,7 @@ namespace NexEditor.ScriptableDashboard.Editor
         }
 
         // プロパティセルの描画
-        void DrawPropertyCell(SerializedProperty prop, params GUILayoutOption[] options)
+        void DrawPropertyCell(int index, SerializedProperty prop, params GUILayoutOption[] options)
         {
             if (prop.propertyType == SerializedPropertyType.String) // String Field
             {
@@ -362,8 +364,10 @@ namespace NexEditor.ScriptableDashboard.Editor
                     }
                 }
             }
-            else if (prop.propertyType == SerializedPropertyType.ObjectReference && // Sprite Field
-                     prop.objectReferenceValue is Sprite sprite)
+            else if (
+                selectedIndices.Contains(index) && // 選択されている行
+                prop.propertyType == SerializedPropertyType.ObjectReference && // Sprite Field
+                prop.objectReferenceValue is Sprite sprite)
             {
                 EditorGUILayout.BeginVertical(GUILayout.Width(50));
                 EditorGUILayout.PropertyField(prop, GUIContent.none, options);
@@ -609,6 +613,28 @@ namespace NexEditor.ScriptableDashboard.Editor
             }
 
             return false;
+        }
+
+        void RefreshSerializedObjects()
+        {
+            // 既存キーセットを取得
+            var keys = new HashSet<DataType>(serializedObjects.Keys);
+
+            // Collectionにあるものを全てキャッシュ、なければ新規作成
+            foreach (var obj in dashboard.Collection)
+            {
+                if (!serializedObjects.ContainsKey(obj))
+                {
+                    serializedObjects[obj] = new SerializedObject(obj);
+                }
+                keys.Remove(obj); // 生きてるものは消していく
+            }
+
+            // Collectionに存在しないキャッシュは削除
+            foreach (var obj in keys)
+            {
+                serializedObjects.Remove(obj);
+            }
         }
     }
 }
