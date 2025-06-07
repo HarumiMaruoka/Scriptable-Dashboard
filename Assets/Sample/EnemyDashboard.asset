@@ -2622,7 +2622,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a9d44db5aae28d48a9989405d900276, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _enemyName: c
+  _enemyName: 'ccccc
+
+'
   _health: 0
   _speed: 0
   _color: {r: 0, g: 0, b: 0, a: 0}
@@ -5038,7 +5040,7 @@ MonoBehaviour:
   _health: 0
   _speed: 0
   _color: {r: 0, g: 0, b: 0, a: 0}
-  _icon: {fileID: 0}
+  _icon: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   _prefab: {fileID: 0}
 --- !u!114 &-348259190934627494
 MonoBehaviour:
@@ -5456,6 +5458,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _enemyName: '11BBBBB11
+
+
+
+
+
+
 
 
 '
@@ -9292,7 +9300,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a9d44db5aae28d48a9989405d900276, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _enemyName: 
+  _enemyName: AAAAA
   _health: 0
   _speed: 0
   _color: {r: 0, g: 0, b: 0, a: 0}
@@ -9491,7 +9499,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _enemyName: BBB
-  _health: 0
+  _health: 5
   _speed: 0
   _color: {r: 0, g: 0, b: 0, a: 0}
   _icon: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}

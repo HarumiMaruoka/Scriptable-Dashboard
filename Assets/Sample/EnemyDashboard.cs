@@ -18,10 +18,15 @@ public class EnemyDashboardEditor : Editor
     public override void OnInspectorGUI()
     {
         base.OnInspectorGUI();
-        if (GUILayout.Button("OpenEditWindow"))
+        if (GUILayout.Button("OpenEditWindow Old"))
         {
             var window = EnemyDashboardWindow.ShowWindow();
             window.Init((EnemyDashboard)target);
+        }
+
+        if (GUILayout.Button("OpenEditWindow New"))
+        {
+            EnemyDashboardWindow2.ShowWindow((EnemyDashboard)target);
         }
 
         if (GUILayout.Button("Create Enemy"))

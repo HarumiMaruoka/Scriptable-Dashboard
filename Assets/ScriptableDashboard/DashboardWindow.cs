@@ -11,12 +11,12 @@ namespace NexEditor.ScriptableDashboard.Editor
     {
         private Dictionary<DataType, SerializedObject> serializedObjects = new Dictionary<DataType, SerializedObject>();
         private ScriptableDashboard<DataType> dashboard;
+        private Vector2 scroll;
 
         List<string> displayNames = new List<string>();
         List<string> fieldNames = new List<string>();
         private FieldInfo[] fieldInfos;
         private Dictionary<string, FieldInfo> fieldNameToInfo = new Dictionary<string, FieldInfo>();
-        private Vector2 scroll;
 
         // 選択
         private SortedSet<int> selectedIndices = new SortedSet<int>();
@@ -27,13 +27,13 @@ namespace NexEditor.ScriptableDashboard.Editor
         private int resizingColumn = -1;
         private float dragStartX, dragStartWidth;
 
-        // 行移動
-        private int dragSourceIndex = -1;
-        private int dragTargetIndex = -1;
-
         // ソート
         private int sortColumnIndex = -1; // -1は未選択
         private bool isAscending = true;  // trueなら昇順、falseなら降順
+
+        // 行移動
+        private int dragSourceIndex = -1;
+        private int dragTargetIndex = -1;
 
         // フィルター
         private string filterString = "";

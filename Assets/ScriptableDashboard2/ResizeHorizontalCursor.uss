@@ -1,0 +1,3 @@
+VisualElement {
+    cursor: resize-horizontal;
+}

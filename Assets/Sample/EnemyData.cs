@@ -1,9 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class EnemyData : ScriptableObject
 {
-    [SerializeField, TextArea]
+    [SerializeField, TextArea(0,9999)]
     private string _enemyName;
     [SerializeField]
     private int _health;
