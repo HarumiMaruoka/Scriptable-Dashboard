@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEditor;
 #endif
 
-namespace NexEditor
+namespace NexEditor.ScriptableDashboard
 {
     public class ScriptableDashboard<T> : ScriptableObject, IEnumerable<T> where T : ScriptableObject
     {
